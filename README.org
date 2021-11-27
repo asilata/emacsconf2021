@@ -1,0 +1,6 @@
+#+title: README
+#+author: Asilata Bapat
+
+This repository contains pared-down versions of the files used as demos in my EmacsConf 2021 talk, titled "Babel for academics".
+It also contains the talk slides.
+The talk webpage is [[https://emacsconf.org/2021/talks/babel/][here]].
