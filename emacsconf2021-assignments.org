@@ -1,0 +1,801 @@
+#+title: Games, graphs, and machines
+#+author: Instructor: Asilata Bapat
+#+subtitle: MATH2301, Semester 2, 2021
+
+* Setup                                                            :noexport:
+** General startup and export options
+#+startup: noptag overview hideblocks
+#+options: toc:nil tags:nil
+
+#+latex_class: amsart
+#+latex_header: \usepackage{fullpage} \usepackage[charter]{mathdesign} \usepackage{environ}
+#+latex_header: \usepackage{mdframed} \usepackage{svg} \usepackage{tikz}
+#+latex_header: \usepackage{etoolbox} \newtoggle{solutions} \togglefalse{solutions}
+#+latex_header: \usepackage{enumitem} \setenumerate{itemsep=0.5em}
+#+latex_header:  \NewEnviron{solution}{\iftoggle{solutions}{\vspace{1em}\begin{mdframed}\begin{proof}[Solution]\BODY\end{proof}\end{mdframed}\vspace{1em}}{}}
+#+latex_header: \usetikzlibrary{arrows,automata,positioning}
+#+latex_compiler: pdflatex
+
+#+property: header-args:dot :exports results :results drawer
+#+property: header-args:python :exports results :results value latex drawer
+
+** Export setup
+This code block defines local variables for LaTeX export.
+In particular, we do the following, among other things.
+1. Get ~org-latex-pdf-process~ to run ~pdflatex~ with ~shell-escape~.
+2. Additionally get ~org-latex-pdf-process~ to move generated image files to the output directory.
+3. Set a nicer subtitle format.
+4. Make sure we run ~python3~ (this is only for older machines).
+#+name: export-setup
+#+begin_src emacs-lisp :results silent 
+  (setq-local org-latex-pdf-process
+        (let
+            ((cmd (concat "pdflatex -shell-escape -interaction nonstopmode"
+                          " --synctex=1"
+                          " -output-directory %o %f")))
+          (list cmd
+                "cd %o; if test -r %b.idx; then makeindex %b.idx; fi"
+                "cd %o; bibtex %b"
+                cmd
+                cmd
+                "mv *.svg %o/"
+                "mv *.png %o/"                  
+                "rm -rf %o/svg-inkscape"
+                "mv svg-inkscape %o/"
+                )))
+  (setq-local org-latex-subtitle-format "\\\\\\medskip
+                         \\noindent %s")
+  (setq-local org-confirm-babel-evaluate nil)
+  (setq-local org-babel-python-command "python3")
+#+end_src
+
+** Other export helpers
+#+name: export-subtree
+#+begin_src emacs-lisp :results silent
+  (defun export-subtree ()
+    (let ((tags (org-get-tags)))
+      (unless (member "noexport" tags)
+        (org-latex-export-to-pdf nil t))))
+#+end_src
+
+#+name: export-everything :results silent
+#+begin_src emacs-lisp
+  (org-map-entries
+   (lambda ()
+     (let ((filename (org-entry-get nil "export_file_name")))
+       (if (and filename (not (string-blank-p filename)))
+           (export-subtree))))
+   t
+   'file)
+#+end_src
+
+** Code setup
+#+begin_src shell :results output silent
+  pip install numpy
+  pip install array_to_latex
+#+end_src
+
+#+name: python-matrix-setup
+#+begin_src python :session matrix
+  import numpy as np
+  import array_to_latex as a2l
+
+  def min_plus_product(A,B):
+      B = np.transpose(B)
+      Y = np.zeros((len(B),len(A)))
+      # Add the ith column of the original B to everything, then take min.
+      for i in range(len(B)):
+          Y[i] = (A + B[i]).min(1)
+      return np.transpose(Y)
+#+end_src
+
+** Miscellaneous helpers
+See the "Post-processing" section of [[https://orgmode.org/manual/Results-of-Evaluation.html][this section of the org manual]].
+We use this particularly for ~dot~ source blocks that output files, and we want them to render in LaTeX with a specified width.
+#+name: attr_wrap
+#+begin_src sh :var data="" :var widthf="1" :results output
+  echo "#+attr_latex: :width $widthf\\textwidth"
+  echo "$data"
+#+end_src
+
+This block defines the LaTeX code to toggle solutions on or off based on a headline tag of ~:solved:~.
+#+name: togglesolutions
+#+begin_src emacs-lisp :results value latex :exports results 
+  (let ((tags (org-get-tags nil t)))
+    (if (member "solved" tags)
+        "\\toggletrue{solutions}"
+      "\\togglefalse{solutions}"))
+#+end_src  
+
+This block appends "-solved" to the export file name for assignments that have the ~:solved:~ tag.
+It also removes the "-solved" suffix from the export file name for assignments that either don't have the ~:solved:~ tag.
+This will locally be added to the ~before-save-hook~.
+#+name: process-export-filenames
+#+begin_src emacs-lisp :results output silent
+  (org-map-entries
+   (lambda ()
+     (let ((filename (org-entry-get nil "export_file_name")))
+       (if (and filename (not (string-blank-p filename)))
+           (unless (string-match "-solved$" filename)
+             (org-entry-put nil "export_file_name" (concat filename "-solved"))))))
+   "solved"
+   'file)
+  (org-map-entries
+   (lambda ()
+     (let ((filename (org-entry-get nil "export_file_name")))
+       (if filename
+           (org-entry-put nil "export_file_name" (string-remove-suffix "-solved" filename)))))
+   "-solved|unsolved"
+   'file)
+#+end_src
+
+** Skeletons
+Define skeletons for commonly-used templates.
+In this case, for assignments and for worksheets.
+#+name: skeletons
+#+begin_src emacs-lisp :results silent :exports none
+  (define-skeleton assignment-skeleton
+    "Docstring."
+    "Number: "
+    "* Assignment " str " (due on " (setq v1 (skeleton-read "Due date: ")) " at 11:59pm) :assignment: \n"
+    >":properties:\n"
+    >":export_file_name: artifacts/hw"str"\n"
+    >":export_date: Due on " v1 " at 11:59pm \n"
+    >":end:\n"
+    >"#+call: togglesolutions()\n"
+    )
+  (define-skeleton worksheet-skeleton
+    "Docstring"
+    "Number: "
+    "* Worksheet "str" :worksheet: \n"
+    >":properties:\n"
+    >":export_file_name: artifacts/ws"str"\n"
+    >":end:\n"
+    >"#+call: togglesolutions()\n"
+    "\n"
+    )
+#+end_src
+
+* Assignment 1 (due on 6 August 2021 at 11:59pm)          :assignment:solved:
+:properties:
+:export_file_name: artifacts/hw1-solved
+:export_date: Due on 6 August 2021 at 11:59pm
+:end:
+#+call: togglesolutions()
+1. Let \(S = \mathbb{N} \times \mathbb{N}\).
+   Define a relation \(R\) on \(S\) as follows:
+   \[ R = \{((a,b),(c,d)) \mid a + d = b + c\}.\]
+   Is \(R\) an equivalence relation? Justify. If yes, describe its equivalence classes.
+   #+begin_solution
+   We show the three properties.
+   - Reflexivity :: Note that \(a + b = b + a\), so \(((a,b),(a,b)) \in R\) for each element \((a,b) \in S\).
+   - Symmetry :: If \(((a,b),(c,d)) \in R\) then \(a + d = b + c\). We can rewrite this as \(c + b = a + d\), which means that \(((c,d), (a,b)) \in R\). This is true for all elements \(a,b,c,d \in \mathbb{N}\).
+   - Transitivity :: Suppose that \(((a,b),(c,d))\) and \(((c,d),(e,f))\) are both in \(R\). We know that \(a + d = b + c\) and that \(c + f = d + e\). Adding the two equations, we see that \(a + d + c + f = b + c + d + e\). We can now cancel \(c + d\) from both sides to see that \(a + f = b + e\), and so \(((a,b), (e,f)) \in R\).
+
+   Each equivalence class consists of all pairs of natural numbers \((a,b)\) such that \(a - b\) is fixed.
+   This is because \((a,b) \sim (c,d)\) if and only if \(a - b = c - d\).
+   #+end_solution
+
+2. Let \(S = \mathbb{Z} \times \mathbb{Z}\).
+   Define a relation \(R\) on \(S\) as follows:
+   \[ R = \{((a,b),(c,d)) \mid ad = bc\}.\]
+   Is \(R\) an equivalence relation? Justify. If yes, describe its equivalence classes.
+   #+begin_solution
+   No, it is not an equivalence relation. It fails transitivity.
+   For example, \((1,3) \sim (0,0)\) and \((0,0)\sim (2,5)\) but \((1,3)\not \sim (2,5)\).
+   #+end_solution
+
+3. Let \(R\) and \(T\) both be relations on a set \(S\). For each statement below, either justify it or give a counterexample.
+   1. If \(R\) and \(T\) are symmetric, then \(R \cup T\) is symmetric.
+      #+begin_solution
+      This is true. If \((a,b) \in R \cup T\) then either \((a,b) \in R\) or \((a,b) \in T\). Suppose \((a,b) \in R\). Then since \(R\) is symmetric, we have \((b,a) \in R\), and so \((b,a) \in R \cup T\). By a similar argument, if \((a,b) \in T\) then \((b,a) \in T\) and so \((b,a) \in R \cup T\).
+      #+end_solution
+   2. If \(R\) and \(T\) are transitive, then \(R \cup T\) is transitive.
+      #+begin_solution
+      This is false. For example, we can have \(R = \{(1,2)\}\)  and \(T = \{(2,3)\}\). Both \(R\) and \(T\) ar trivially transitive because they each only have one element. But \(R \cup T\) is not transitive, because it does not contain \(\{(1,3)\}\).
+      #+end_solution
+
+4. Consider the following graphs. For each one, write down which of the following properties are satisfied by the relation represented by the graph: reflexivity, symmetry, anti-symmetry, transitivity, being a function. You do not have to justify your answers, but you should think about the justifications instead of guessing.
+   1. \mbox{}
+      #+begin_src dot :file hw1-g1.png :post attr_wrap(widthf=0.3, data=*this*) 
+        digraph {
+            rankdir=LR;
+            0 [label="a"];
+            1 [label="b"];
+            2 [label="c"];
+            3 [label="d"];
+            0 -> 0;
+            0 -> 1;
+            0 -> 2;
+            0 -> 3;
+            1 -> 1;
+            2 -> 2;
+            3 -> 3;
+        }
+      #+end_src
+
+      #+begin_solution
+      | Property         | Satisfied? | Reason if not                   |
+      |------------------+------------+---------------------------------|
+      | Reflexivity      | True       |                                 |
+      | Symmetry         | False      | \((a,b) \in R\) but \((b,a) \notin R\) |
+      | Anti-symmetry    | True       |                                 |
+      | Transitivity     | True       |                                 |
+      | Being a function | False      | \((a,b), (a,d)\) both in \(R\)  |
+      #+end_solution
+
+   2. \mbox{}
+      #+begin_src dot :file hw1-g2.png :post attr_wrap(widthf=0.4, data=*this*)
+        digraph {
+            rankdir=LR;
+            0 [label="a"];
+            1 [label="b"];
+            2 [label="c"];
+            3 [label="d"];
+            0 -> 2;
+            2 -> 0;
+            0 -> 3;
+            3 -> 0;
+            2 -> 3;
+            3 -> 2;
+            1 -> 1;
+        }
+      #+end_src
+
+      #+begin_solution
+      | Property         | Satisfied? | Reason if not                         |
+      |------------------+------------+---------------------------------------|
+      | Reflexivity      | False      | \((a,a) \notin R\)                         |
+      | Symmetry         | True       |                                       |
+      | Anti-symmetry    | False      | \((c,d), (d,c)\) both in \(R\)        |
+      | Transitivity     | False      | \((a,c), (c,a) \in R\) but \((a,a)\notin R\) |
+      | Being a function | False      | \((d,a),(d,c)\) both in \(R\)         |
+      #+end_solution
+
+   3. \mbox{}
+      #+begin_src dot :file hw1-g3.png :post attr_wrap(widthf=0.5, data=*this*)
+        digraph {
+            rankdir=LR;
+            0 [label="a"];
+            1 [label="b"];
+            2 [label="c"];
+            3 [label="d"];
+            0 -> 1;
+            1 -> 2;
+            2 -> 3;
+            3 -> 0;
+        }
+      #+end_src
+
+      #+begin_solution
+      | Property         | Satisfied? | Reason if not                        |
+      |------------------+------------+--------------------------------------|
+      | Reflexivity      | False      | \((a,a)\notin R\)                         |
+      | Symmetry         | False      | \((a,b)\in R\) but \((b,a)\notin R\)        |
+      | Anti-symmetry    | True       |                                      |
+      | Transitivity     | False      | \((a,b),(b,c) \in R\) but \((a,c)\notin R\) |
+      | Being a function | True       |                                      |
+      #+end_solution
+
+* Assignment 2 (due on 13 August 2021 at 11:59pm)         :assignment:solved:
+:properties:
+:export_file_name: artifacts/hw2-solved
+:export_date: Due on 13 August 2021 at 11:59pm 
+:end:
+#+call: togglesolutions()
+1. Consider modular addition with the modulus \(d = 6\). For each modular number \([x]\), determine whether or not \([x]\) has a multiplicative inverse, and if yes, find the inverse. That is, figure out whether there is some \([y]\) such that \([x]\cdot[y] = [1]\).
+   
+   (Bonus: Can you find a pattern here? Does a number ever have more than one inverse?)
+   #+begin_solution
+   There are \(6\) equivalence classes modulo \(d\), namely \([0], [1], \ldots, [5]\).
+   Note that \([1] \cdot [1] = [1] = [5]\cdot [5]\).
+   None of the other numbers have inverses: you can check this directly, for example note that \([0]\cdot [x] = [0]\) for any \([x]\), and similarly we have \([2] \cdot [1] = [2]\), \([2] \cdot [2] = [4]\), \([2] \cdot [3] = [0]\), \([2] \cdot [4] = [2]\), \([2] \cdot [5] = [4]\), etc.
+
+   No number has more than one inverse. Indeed, if \([x]\cdot[y] = [1]\) and \([x]\cdot [z] = [1]\) then we know that \(xy = 6n + 1\) and \(xz = 6m + 1\), and so \(xy - xz = x(y-z) = 6(n-m)\). On the other hand, we know that \(yx = 6n + 1\), so multiplying the previous equation by \(y\), we get
+   \[(6n+1)(y-z) = 6(n-m).\]
+   Rewrite to see that \((y-z) + 6n(y-z) = 6(n-m)\), or \((y-z) = 6(n-m) - 6n(y-z)\). Since the right hand side is a multiple of \(6\), we see that \([y] = [z]\).
+
+   The pattern is that a number cannot have a multiplicative inverse if it is divisible by any prime that \(6\) is also divisible by.
+   Note that having an inverse means that \([x]\cdot[y] = [1]\), so that \(xy = 6n + 1\), or alternatively, \(xy - 6n = 1\) for some \(n\).
+   Now if \(x\) is divisible by \(2\) (or \(3\)), then the left hand side is divisible by \(2\) (or \(3\)), while the right hand side isn't, and so that equation cannot be true.
+   On the other hand, suppose that \([x]\) does not share any common factor with \([6]\), which means that their greatest common divisor (GCD) equals 1. The Euclid's GCD algorithm (which we haven't talked about in class) says that there must be integers \(m\) and \(n\) such that \(mx + 6n = 1\). If you rewrite this as \(mx = 6(-n) + 1\), we see that \([m]\) is an inverse of \([x]\).
+   #+end_solution
+
+2. Fix a modulus \(d > 1\), and consider the equivalence relation \(\{(x,y) \in \mathbb{Z} \times \mathbb{Z} \mid d\mid (x-y)\}\).
+   Let \(x\) and \(y\) be two arbitrary integers.
+   Show that if \([x] = [y]\), then \([x^2] = [y^2]\).
+   #+begin_solution
+   Knowing that \([x] = [y]\) means that there is some integer \(n\) such that \(x = nd + y\). In this case, we have \(x^2 = (nd+y)^2 = n^2 d^2 + 2ndy + y^2\). Since \(n^2 d^2 + 2ndy = (n^2 d + 2ny)d\) is a multiple of \(d\), we conclude that \([x^2] = [y^2]\).
+   #+end_solution
+
+3. Show that if \(3x \equiv 5\) modulo \(7\), then \(x \equiv 4\) modulo \(7\).
+   #+begin_solution
+   There are many ways to solve this. Here is one approach.
+   If \(3x \equiv 5\) modulo \(7\), then we know that \(3x - 5 = 7n\) for some \(n \in \mathbb{Z}\).
+   Note that \(3 \times 5 = 7\times 2 + 1\), and so \(15x - 25 = 35n\) gives \(x + 14x - 25 = 35n\).
+   Rewriting \(25\) as \(25 = 21 + 4\), we see that
+   \[x - 4 = 35n - 21 - 14x = 7(5n +3 - 2x),\]
+   which means that \(x \equiv 4\) modulo \(7\).
+   #+end_solution
+
+4. For each property listed, find an example of a partial order that has that property, with justification or specific examples as appropriate. Draw its Hasse diagram.
+   1. A partial order that is also an equivalence relation.
+      #+begin_solution
+      This is a relation that is reflexive, symmetric, anti-symmetric, and transitive. This means it consists of pairs that lie solely on the diagonal. So for example the relation \(\{(a,a),(b,b)\}\) on \(S = \{a,b\}\) has this property.
+      #+end_solution
+   2. An element \(a\) of a poset is said to be /maximal/ there is no element \(b \neq a\) such that \(a \preceq b\).
+      Find a poset where every element is maximal.
+      #+begin_solution
+      The previous example also works for this problem: all elements are incomparable so they are all maximal.
+      #+end_solution
+   3. An element \(a\) of a poset is said to be the /maximum/ element if for every element \(b\), we have \(b \preceq a\).
+      Find a poset that has at least one maximal element but no maximum elements.
+      #+begin_solution
+      Consider the partial order relation on \(\{a,b,c,d\}\) specified by \(a \preceq b\), \(a \preceq d\), \(c \preceq b\), \(c \preceq d\).
+      \begin{center}
+        \begin{tikzpicture}
+          \node(a) at (0,0) {$a$};
+          \node[right of=a] (c) {$c$};
+          \node[above of=a] (b) {$b$};
+          \node[right of=b] (d) {$d$};
+          \draw[thick] (a) -- (b);
+          \draw[thick] (a) -- (d);
+          \draw[thick] (c) -- (b);
+          \draw[thick] (c) -- (d);        
+        \end{tikzpicture}
+      \end{center}
+      #+end_solution
+
+5. Let \((P,\preceq)\) be a poset and let \(A\) be any subset of \(P\).
+   An element \(u \in P\) is said to be an /upper bound/ for \(A\) if for each \(a \in A\), we have \(a \preceq u\).
+   An element \(l \in P\) is said to be a /lower bound/ for \(A\) if for each \(a \in A\), we have \(l \preceq a\).
+   Further, an element \(u \in P\) is said to be a /least upper bound/ (lub) for \(A\) if:
+   - \(u\) is an upper bound for \(A\), and
+   - if \(v \in P\) is any upper bound for \(A\), then \(u \preceq v\).
+   Similarly, an element \(l \in P\) is said to be a /greatest lower bound/ (glb) for \(A\) if:
+   - \(l\) is a lower bound for \(A\), and
+   - if \(m \in P\) is any lower bound for \(A\), then \(m \preceq l\).
+   \vspace{0.5em}
+   With this background, answer the following.
+   1. Draw a Hasse diagram of a poset \((P,\preceq)\) and write down a subset \(A\) that has an upper bound, but no least upper bound. Justify briefly.
+      #+begin_solution
+      There are many options. In particular, the following poset works.
+      \begin{center}
+        \begin{tikzpicture}
+          \node(a) at (0,0) {$a$};
+          \node[right of=a] (c) {$c$};
+          \node[above of=a] (b) {$b$};
+          \node[right of=b] (d) {$d$};
+          \draw[thick] (a) -- (b);
+          \draw[thick] (a) -- (d);
+          \draw[thick] (c) -- (b);
+          \draw[thick] (c) -- (d);        
+        \end{tikzpicture}
+      \end{center}
+      We can take \(A = \{a,c\}\). Then the elements \(b\) and \(d\) are the only upper bounds for \(A\), but they are not related to each other so neither of them can be a least upper bound.
+      #+end_solution
+
+   2. Draw a Hasse diagram of a poset \((P,\preceq)\) and write down a subset \(A\) that has a greatest lower bound. Justify briefly.
+      #+begin_solution
+      There are many options. In particular, the following poset works.
+      \begin{center}
+        \begin{tikzpicture}
+          \node(a) at (0,0) {$a$};
+          \node[right of=a] (c) {$c$};
+          \node[above of=a] (b) {$b$};
+          \node[right of=b] (d) {$d$};
+          \draw[thick] (a) -- (b);
+          \draw[thick] (a) -- (d);
+          \draw[thick] (c) -- (b);
+          \draw[thick] (c) -- (d);        
+        \end{tikzpicture}
+      \end{center}
+      We can take \(A = \{a\}\). Then the only lower bound for \(A\) is the element \(a\) itself, so it is a greatest lower bound.
+      #+end_solution
+
+   3. Complete the following partial proof of the following statement: "If \((P,\preceq)\) is a poset and \(A \subseteq P\) has a least upper bound, then the least upper bound is unique." Write out the third step with full justifications.
+      1. Suppose that \(A \subseteq P \) has a least upper bound \(u \in P\).
+
+      2. Suppose that \(v \in P\) is also a least upper bound of \(A\).
+
+      3. \(\cdots\) \fbox{Fill this in} \(\cdots\)
+         #+begin_solution
+         Since \(u\) is a lub for \(A\) and \(v\) is another upper bound, we have \(u \preceq v\).
+         Since \(v\) is a lub for \(A\) and \(u\) is another upper bound, we have \(v \preceq u\).
+         The partial order relation is anti-symmetric. So if \(u \preceq v\) and \(v \preceq u\), then \(u = v\).
+         #+end_solution
+
+      4. Therefore, \(u = v\).
+
+   4. Let \(S\) be a finite set and let \(P\) be the power set of \(S\) with \(\subseteq\) as the partial order relation.
+      Let \(A, B\) be subsets of \(S\). Find formulas for the lub and glb of \(\{A,B\}\). Justify briefly, but you do /not/ need to give a formal proof.
+      #+begin_solution
+      The lub of \(\{A,B\}\) is just \(A \cup B\).
+      To justify this, first see that \(A \subseteq A \cup B\) and \(B \subseteq A \cup B\), so the set \(A \cup B\) is an upper bound.
+      Now if we have any other upper bound \(C\), it has the property that \(A \subseteq C\) and \(B \subseteq C\). So every element \(a \in A\) is in \(C\) and every element \(b \in B\) is in \(C\). Any element of \(A \cup B\) is either an element of \(A\) or an element of \(B\), so we see that \((A \cup B) \subset C\).
+
+      The glb of \(\{A,B\}\) is just \(A \cap B\).
+      To justify this, first see that \(A \supseteq A \cap B\) and \(B \supseteq A \cap B\), so the set \(A \cap B\) is an upper bound.
+      Now if we have any other lower bound \(C\), it has the property that \(A \supseteq C\) and \(B \supseteq C\). So every element \(c \in C\) is both an element of \(A\) and an element of \(B\), and thus an element of \(A \cap B\).
+      So we see that \((A \cap B) \supset C\).
+      #+end_solution
+
+* Assignment 3 (due on 20 August 2021 at 11:59pm)         :assignment:solved:
+:properties:
+:export_file_name: artifacts/hw3-solved
+:export_date: Due on 20 August 2021 at 11:59pm 
+:end:
+#+call: togglesolutions()
+1. Consider a graph whose adjacency matrix is
+   \[A = \begin{pmatrix}1&1&1\\0&1&1\\0&0&1\end{pmatrix}.\]
+   Find the number of paths of length \(4\) from \(1\) to \(3\).
+   #+begin_solution
+   We solve this by taking \(A^4\) and computing the entry in the spot \((1,3)\).
+   #+begin_src python :session matrix
+     A = np.array([[1,1,1],[0,1,1],[0,0,1]])
+     s = a2l.to_ltx(A,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     A2 = A.dot(A)
+     A4 = A2.dot(A2)
+     s2 = a2l.to_ltx(A2,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     s4 = a2l.to_ltx(A4,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     '\[A^2 =' + s2 + ',\quad A^4 = (A^2)^2=' + s4 + '.\]'
+   #+end_src      
+
+   So the answer is \(10\).
+   #+end_solution
+
+2. 
+   1. Find (without explicit calculation) an example of a \(4 \times 4\) nonzero adjacency matrix such that all powers of this matrix beyond the 10th power are zero. Justify briefly.
+   2. Show that the 8th power of any such matrix must also be zero.
+   3. Is it true that the cube of any such matrix also has to be zero?
+   #+begin_solution
+   We can do this by drawing a graph where there are no paths of length \(10\) or higher between any pair of vertices. For example, we can consider
+   #+begin_src python :session matrix
+     A = np.array([[0,1,0,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]])
+     s = a2l.to_ltx(A,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     '\[A =' + s + '.\]'
+   #+end_src
+
+   Note that if the 8th power is not zero, then some entry \((i,j)\) is nonzero, so there is a length eight path from \(i\) to \(j\). But there are only four vertices, so there must be some loop in this path! By repeating the loop several times, we can get longer and longer paths from \(i\) to \(j\), so there must certainly be paths of length beyond \(10\). But all powers beyond the 10th power are zero, so this can only happen if the 8th power of the matrix was zero to begin with.
+
+   The cube need not be zero. In our example the cube of our matrix is non-zero:
+   #+begin_src python :session matrix
+     A2 = A.dot(A)
+     A3 = A2.dot(A)
+     s3 = a2l.to_ltx(A3,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     '\[A^3 =' + s3 + '.\]'
+   #+end_src         
+   
+   #+end_solution
+
+3. Draw the graph of the relation \(R = \{(a,b) \mid 0 \leq b - a \leq 2\}\) on the set \(S = \{1,2,3,4\}\).
+   Draw the graph of this relation, and also the transitive closure of the graph of this relation.
+   Also write down the adjacency matrices of both graphs (using the drawing, not using Boolean product).
+   #+begin_solution
+   The graph is as follows (first figure). We need to add one extra edge from \(1\) to \(4\) to make it transitive. This is shown with a dashed edge in the second figure.
+
+   #+latex: \begin{minipage}{0.4\linewidth}
+   #+begin_src dot :file hw3-tc.svg :post attr_wrap(widthf=0.6, data=*this*)
+     digraph {
+         1 -> 1;
+         1 -> 2;
+         1 -> 3;
+         2 -> 2;
+         2 -> 3;
+         2 -> 4;
+         3 -> 3;
+         3 -> 4;
+         4 -> 4;
+     }
+   #+end_src
+   #+latex: \end{minipage}
+   #+latex: \begin{minipage}{0.4\linewidth}
+   #+begin_src dot :file hw3-tct.png :post attr_wrap(widthf=0.6, data=*this*)
+     digraph {
+         1 -> 1;
+         1 -> 2;
+         1 -> 3;
+         1 -> 4 [style=dashed];
+         2 -> 2;
+         2 -> 3;
+         2 -> 4;
+         3 -> 3;
+         3 -> 4;
+         4 -> 4;
+     }
+   #+end_src     
+   #+latex: \end{minipage}
+
+   Let \(A\) be the adjacency matrix of the first graph and \(B\) the adjacency matrix of the second graph. Then we have
+   \[A = \begin{pmatrix}1&1&1&0\\0&1&1&1\\0&0&1&1\\0&0&0&1\end{pmatrix}, \quad
+   B = \begin{pmatrix}1&1&1&1\\0&1&1&1\\0&0&1&1\\0&0&0&1\end{pmatrix}\]
+   #+end_solution   
+
+4. Find the transitive closure of the relation \(R = \{(a,b) \mid a+b > 3\}\) on the set \(\{1,2,3\}\) using Boolean powers of the adjacency matrix.
+   #+begin_solution
+   The adjacency matrix is
+   #+begin_src python :session matrix
+     A = np.array([[0,0,1],[0,1,1],[1,1,1]], dtype=bool)
+     s = a2l.to_ltx(A,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     '\[A =' + s + '.\]'
+   #+end_src   
+
+   To take the transitive closure, we have to take Boolean powers up to 3 and "add" (that is, "or") them.
+   Note that
+   #+begin_src python :session matrix
+     A2 = A.dot(A)
+     A3 = A2.dot(A)     
+     s2 = a2l.to_ltx(A2,frmt='{:.0f}',arraytype='pmatrix',print_out=False)
+     s3 = a2l.to_ltx(A3,frmt='{:.0f}',arraytype='pmatrix',print_out=False)     
+     '\[A^{*2} =' + s2 + ', \quad A^{*3} =' + s3 + '.\]'
+   #+end_src      
+   So the adjacency matrix of the transitive closure is
+   #+begin_src python :session matrix
+     '\[A \\vee A^{*2} \\vee A^{*3} =' + s3 + '.\]'
+   #+end_src
+   #+end_solution
+
+5. 
+   1. Recall from the last assignment what it means to be the maximal element of a poset. Using that knowledge, come up with a definition of what it means to be a minimal element of a poset.
+      #+begin_solution
+      Let \((P,\preceq)\) be a poset. An element \(a \in P\) is called /minimal/ if there is no \(b \in P\) such that \(b \neq a\) and \(b \preceq a\).
+      #+end_solution
+   2. In class we defined the transitive closure of a relation \(R\) on a set \(S\) as the minimal relation \(R'\) with the property that \(R \subseteq R'\). This means that if \(R''\) is any other transitive relation on \(S\) such that \(R \subseteq R''\), then \(R' \subseteq R''\).
+      Fill in the details of the proof of the following statement: any relation \(R\) on a set \(S\) has a unique transitive closure.
+      - Suppose that \(T_1\) and \(T_2\) are both transitive closures of a relation \(R\) on a set \(S\).
+
+      - \(\cdots\) \fbox{Fill this in} \(\cdots\)
+        #+begin_solution
+        First note that both being transitive closures means that \(R \subseteq T_1\) and \(R \subseteq T_2\), and that \(T_1\) and \(T_2\) are both transitive relations.
+        Further, since \(T_1\) is a transitive closure, we have that \(T_1 \subseteq T_2\).
+        Similarly, since \(T_2\) is a transitive closure, we have that \(T_2 \subseteq T_1\).
+        #+end_solution
+
+      - Therefore \(T_1 = T_2\).
+        
+
+
+
+* Worksheet 1                                              :worksheet:solved:
+:properties:
+:export_file_name: artifacts/ws1-solved
+:end:
+#+call: togglesolutions()
+
+** Sets and set notation
+1. Some of the following sets are the same, and some are different. Decide and discuss.
+   1. \(\emptyset\)
+   2. \(\cal{P}(\emptyset)\)
+   3. \(\emptyset \cap \cal{P}(\emptyset)\)
+   4. \(\emptyset \cup \cal{P}(\emptyset)\)
+   5. \(\emptyset \times \cal{P}(\emptyset)\)
+   6. \(\cal{P}(\emptyset) \times \cal{P}(\emptyset)\)
+
+   #+begin_solution
+   Here are all the sets in plainer language.
+   1. The empty set, \(\emptyset\).
+   2. The set containing the empty set, \(\{\emptyset\}\).
+   3. The empty set, \(\emptyset\).
+   4. The set containing the empty set, \(\{\emptyset\}\)
+   5. The empty set, \(\emptyset\).
+   6. The set \(\{(\emptyset, \emptyset)\}\).
+   #+end_solution
+
+2. The symbol \(\exists\) reads as "there exists". The symbol \(\forall\) reads as "for all". The symbols \(\mathbb{N}\), \(\mathbb{Q}\), \(\mathbb{Z}\), and \(\mathbb{R}\) denote the sets of natural numbers (including zero), rational numbers, integers, and reals respectively.
+   Consider the following set:
+   \[\left\{x \in \mathbb{Q}\mid \exists y \in \mathbb{Z} \text{ such that } x = \displaystyle \frac{y}{2} + 1\right\}.\]
+   Some of the following sets are the same as the set described above, and some are not. Decide and discuss.
+   1. \(\displaystyle \left\{x \in \mathbb{Z} \mid \exists y \in \mathbb{Z}\text{ such that } x = \displaystyle \frac{y}{2} + 1\right\}\).
+   2. \(\displaystyle \left\{x \in \mathbb{Q} \mid \exists y \in \mathbb{Z}\text{ such that } 2x = y \right\}\).
+   3. \(\displaystyle \left\{x \in \mathbb{Z} \mid \forall y \in \mathbb{Q}\text{ we have } x = \displaystyle \frac{y}{2} + 1\right\}\).
+   4. \(\displaystyle \left\{x \in \mathbb{R} \mid \exists y \in \mathbb{Z}\text{ such that } x = \displaystyle \frac{y}{2} + 1\right\}\).
+
+   #+begin_solution
+   Here are all the sets described in plainer language.
+   The original set is the set of all \(x\) that can be described as half an integer, plus one. All integers have this form; for example, \(3 = 4/2 + 1\). Additionally, all half-integers also have this form. For example, \(5/2 = 3/2 + 1\). Nothing else has this form: we can conclude this by solving for \(y\) in the equation given to get
+   \[y = 2(x-1)\]
+   where \(x \in \mathbb{Q}\) and \(y \in \mathbb{Z}\). Since \(y\) is an integer, the quantity \(x-1\) can have a denominator of either \(1\) or \(2\).
+
+   So the original set consists of the integers and the half-integers.
+   1. This set simply describes all the integers, because all integers can be expressed in the form shown. It is not the same as the original set.
+   2. This set describes all rational whose denominator is either \(1\) or \(2\). This is the same as the original set.
+   3. This set is the empty set: it is never true for a rational \(x\) that \(x = y/2 + 1\) /for all/ \(y \in \mathbb{Q}\).
+   4. This is the same as the original set: if the given equation holds true, then \(x\) must already belong to the rationals, so the constraint is the same as the constraint of the original set.
+   #+end_solution
+
+
+** Relations
+1. Give examples of relations that have the listed properties, in each case. Remember that you can always give an "abstract" example: that is, any appropriate subset of \(S \times S\) for a well-chosen \(S\).
+   1. Symmetric but not reflexive.
+      #+begin_solution
+      Many possible examples. For instance, \(\{(0,1),(1,0)\}\) on the set \(\{0,1\}\).
+      #+end_solution
+            
+   2. Both symmetric and anti-symmetric.
+      #+begin_solution
+      Symmetric means that if \((x,y) \in R\) then \((y,x) \in R\).
+      Anti-symmetric means that if \((x,y) \in R\) and if \(x\neq y\), then \((y,x) \notin R\).
+      The only possibility is that only elements of the form \((x,x)\) are in R. (But not all such pairs have to be in the relation.)
+      So for example, we can take the relation \(\{(0,0), (2,2)\}\) on the set \(\{0,1,2\}\).
+      #+end_solution      
+
+   3. Neither symmetric nor anti-symmetric.
+      #+begin_solution
+      Many possible examples. For instance, \(\{(0,1),(1,0),(0,2)\}\) on the set \(\{0,1,2\}\).
+      #+end_solution
+
+2. For each kind of relation mentioned, discuss what special property the graph of the relation must satisfy, and also what special property the adjacency matrix for the graph of that relation must satisfy.
+   1. Reflexivity
+      #+begin_solution
+      Every node must have a self-loop. All diagonal entries of the adjacency matrix are equal to \(1\).
+      #+end_solution
+   2. Symmetry
+      #+begin_solution
+      For every arrow \((x,y)\), we also have an arrow \((y,x)\).
+      The adjacency matrix is a symmetric matrix: equal to its own transpose.
+      #+end_solution
+   3. Anti-symmetry
+      #+begin_solution
+      If there is an edge \((x,y)\) with \(y \neq x\), then there is no backwards edge.
+      If the \((i,j)\)th entry of the adjacency matrix is non-zero for some \(i \neq j\), then the \((j,i)\)th entry must be zero.
+      #+end_solution
+   4. Being a function
+      #+begin_solution
+      Every node has exactly one outgoing edge.
+      There is exactly one non-zero entry in each row of the adjacency matrix.
+      #+end_solution
+   5. (\(\ast\)) Transitivity
+      #+begin_solution
+      This is a slightly harder one! Think about it for now, but we will answer this together in class in a few weeks.
+      #+end_solution
+
+3. Let \(S\) be the set of all possible orderings of the tuple \((1,2,3,4)\). For example, \((2,4,1,3)\) and \((4,3,2,1)\) are elements of \(S\).
+   1. How many elements does \(S\) have?
+      #+begin_solution
+      \(S\) has \(4! = 24\) elements.
+      #+end_solution
+   2. Suppose that \(s\) is an element of \(S\). A /swap/ on \(s\) swaps two of the numbers in \(s\). For example, swapping \(1\) and \(2\) in \(s = (1,2,3,4)\) results in \((2,1,3,4)\).
+      Define a relation \(R\) on \(S\) by saying that \((s,t) \in R\) if we can get to \(t\) from \(s\) via an even number of swaps.
+      Check whether \(R\) is an equivalence relation on \(S\). If it is, find its equivalence classes.
+      #+begin_solution
+      Yes, \(R\) is an equivalence relation (I'll leave the checks to you but ask me if you have questions).
+      For now you are meant to compute the equivalence classes by hand. It turns out that there are two of them.
+      I'll write the tuple \((a,b,c,d)\) as \(abcd\) for short.
+      The first one is
+      \[\{1234, 3124, 2314, 4132, 2431, 4213, 3241, 1423, 1324, 2143, 4321, 3412\}.\]
+      These are all the orderings that are reachable from \(1234\) by an even number of swaps.
+      The remaining equivalence class consists of the other 12 possibilities, which I will not write out (you can do that on your own if you wish).
+      #+end_solution
+
+   
+
+* Worksheet 2                                              :worksheet:solved:
+:properties:
+:export_file_name: artifacts/ws2-solved
+:end:
+#+call: togglesolutions()
+
+** Equivalence relations and modular arithmetic
+1. Find all possible equivalence relations on the following set \(S = \{a,b,c\}\).
+   #+begin_solution
+   We group by equivalence classes. There can be at most three equivalence classes, since each element lives in some equivalence class.
+   We have the following possibilities:
+   1. No two distinct elements are equivalent. The equivalence classes are \(\{\{a\},\{b\},\{c\}\}\).
+   2. \(a \sim b\) but \(c\) is not in the same class. The equivalence classes are \(\{\{a,b\},\{c\}\}\).
+   3. \(c \sim b\) but \(a\) is not in the same class. The equivalence classes are \(\{\{c,b\},\{a\}\}\).
+   4. \(a \sim c\) but \(b\) is not in the same class. The equivalence classes are \(\{\{a,c\},\{b\}\}\).
+   5. All three elements are equivalent. The equivalence classes are \(\{\{a,b,c\}\}\).
+   #+end_solution
+2. Is the following relation an equivalence relation?
+   \[\{(x,y)\in \mathbb{Z} \times \mathbb{Z} \mid x - y\text{ is a positive integer multiple of }3\}.\]
+   #+begin_solution
+   No, it is not; it is not symmetric.
+   #+end_solution
+3. Consider the relation on \(\mathbb{Z}\) described by
+   \[\{(a,b) \in \mathbb{Z} \times \mathbb{Z} \mid (a^2 - b^2)\text{ is an integer multiple of }5\}.\]
+   Show that it is an equivalence relation, and find the distinct equivalence classes.
+   #+begin_solution
+   Showing that it is an equivalence is easy.
+   Note that \(5|(a^2-b^2)\) means that \(5|(a+b)(a-b)\). This is true if and only if either \(5|(a+b)\) or \(5|(a-b)\).
+   Saying that \(5|(a+b)\) is the same as saying that \(a \equiv -b\) modulo \(5\), and saying that \(5|(a-b)\) is the same as saying that \(a \equiv b\) modulo \(5\).
+   For any number \(a\), we find all numbers \(b\) such that either \(a+b\) or \(a-b\) is divisible by \(5\).
+   This only depends on the remainder of \(a\) modulo \(5\). There are \(5\) possibilities for this remainder: \(0\), \(1\), \(2\), \(3\), \(4\).
+   We note that under the new relation, we additionally have \(1 \sim 4\) and \(2 \sim 3\). The set of numbers divisible by \(5\) forms its own equivalence class. So there are three equivalence classes, which can be represented as \([0]\), \([1]\), and \([2]\).   
+   #+end_solution
+4. Find the smallest non-negative integer \(b\) that satisfies the following equalities, or justify why it does not exist.
+   The number \(d\) is the modulus.
+   1. \([17] + [b] = [2]\) with \(d = 7\).
+      #+begin_solution
+      \([17] = [3]\) so we need \([b] = [-1] = [6]\). The answer is \(6\).
+      #+end_solution
+   2. \([3b] = [0]\) with \(d = 6\).
+      #+begin_solution
+      \(b = 2\) by direct check.
+      #+end_solution
+   3. \([3b] = [1]\) with \(d = 6\).
+      #+begin_solution
+      Such a \(b\) does not exist. Note that if \([3b] = [1]\) then \(3b - 1 = 6k\)for some integer \(k\). Rearranging, we have
+      \(3b - 6k = 1\). The left hand side is a multiple of \(3\) but the right hand side is not.
+      #+end_solution
+   4. \([b^2] = [4]\) with \(d = 6\).
+      #+begin_solution
+      \(b = 2\) by direct check.
+      #+end_solution
+   5. \([b^2] = [-1]\) with \(d = 15\).
+      #+begin_solution
+      First note that for any integer \(a\), we have \([a^2] = [(a+15)^2]\), so it suffices to check the integers from \(0\) to \(14\) inclusive.
+      We can check explicitly that we never get a remainder of \(14\), which is what we want (\([14] = [-1]\)).
+      | Number | Square | Remainder modulo 15 |
+      |--------+--------+---------------------|
+      |      0 |      0 |                   0 |
+      |      1 |      1 |                   1 |
+      |      2 |      4 |                   4 |
+      |      3 |      9 |                   9 |
+      |      4 |     16 |                   1 |
+      |      5 |     25 |                  10 |
+      |      6 |     36 |                   6 |
+      |      7 |     49 |                   4 |
+      |      8 |     64 |                   4 |
+      |      9 |     81 |                   6 |
+      |     10 |    100 |                  10 |
+      |     11 |    121 |                   1 |
+      |     12 |    144 |                   9 |
+      |     13 |    169 |                   4 |
+      |     14 |    196 |                   1 |
+      Notice that the pattern is symmetric. This is because we also have \([b^2] = [(15-b)^2]\), so we only really needed to check the first half of the table.
+      #+end_solution
+   
+** Partial orders
+1. Draw the Hasse diagram of the partial order from Thursday's class on the set of dwarfs from Snow White. (Sleepy, Grumpy, etc; see the notes for the full definition.)
+   #+begin_solution
+   The Hasse diagram looks as follows.
+   \begin{center}
+     \begin{tikzpicture}
+       \node(doc) {doc};
+       \node[above left of=doc](dopey) {dopey};
+       \node[above left of=dopey](grumpy) {grumpy};
+       \node[above right of=grumpy](sleepy) {sleepy};
+       \node[above of=sleepy](sneezy) {sneezy};
+       \node[above right of=dopey](happy) {happy};
+       \node[right =2cm of doc](bashful) {bashful};
+       \draw[--] (doc) -- (dopey);
+       \draw[--] (dopey) -- (happy);
+       \draw[--] (happy) -- (sleepy);
+       \draw[--] (dopey) -- (grumpy);
+       \draw[--] (grumpy) -- (sleepy);
+       \draw[--] (sleepy) -- (sneezy);
+     \end{tikzpicture}
+   \end{center}
+   #+end_solution
+   
+2. Write down some topological sortings of the relation from the previous problem. Can you figure out how many there are?
+   #+begin_solution
+   The element ~bashful~ can go anywhere since it is unrelated to everything. So let us ignore it for now.
+   The elements from ~doc~ to ~sneezy~ have to be in order, aside from the order of the elements ~grumpy~ and ~happy~.
+   We have two options there:
+   \[(\text{doc}, \text{dopey}, \text{grumpy}, \text{happy}, \text{sleepy}, \text{sneezy}),\]
+   and
+   \[(\text{doc}, \text{dopey}, \text{happy}, \text{grumpy}, \text{sleepy}, \text{sneezy}).\]
+   Once we select one of these, we have seven options to insert the element ~bashful~: either in front, or in between two successive elements, or at the end.
+   The choices for where to put ~happy~ are independent from the two choices we had before, so the total answer is \(2\times 7 = 14\).
+   #+end_solution
+3. Draw the adjacency matrices of one or two (or more...) of the topological sortings that you found above. Do you see a pattern?
+   #+begin_solution
+   With respect to any topological sorting, the adjacency matrix is always upper-triangular (the only non-zero entries are above the diagonal).
+   #+end_solution
+4. Draw all possible shapes of Hasse diagrams on three elements without labelling.
+   #+begin_solution
+   There are five possibilities. I'll leave you to find them all.
+   #+end_solution
+5. Draw all possible shapes of Hasse diagrams on four elements without labelling.
+   #+begin_solution
+   There are 16 possibilities. I'll leave you to find them all.
+   #+end_solution
+
+* Local variables
+# Local variables:
+# org-export-initial-scope: buffer
+# eval: (add-hook 'before-save-hook (lambda () (org-babel-ref-resolve "process-export-filenames")) nil t)
+# eval: (add-hook 'org-export-before-processing-hook (lambda (be) (progn (org-babel-ref-resolve "export-setup") (org-babel-ref-resolve "python-matrix-setup"))) nil t)
+# End:
+    

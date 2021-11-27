@@ -1,0 +1,57 @@
+#+title: Games, graphs, and machines
+#+subtitle: Semester 2, 2021, Australian National University
+#+author: Asilata Bapat
+
+This is the public webpage for the course Games, Graphs, and Machines (MATH2301) taught by [[https://asilata.github.io][Asilata Bapat]] at the Australian National University in Semester 2, 2021.
+Here are the ongoing [[file:ggm.pdf][typed course notes]].
+Please get in touch if you have any comments.
+
+* Notes from lectures
+  These are the handwritten notes from our Zoom lectures. They have not been proofread and may contain some inaccuracies.
+  #+begin_src python :results value html :exports results
+    import glob
+    import datetime
+    import re
+    pre,mid,post =  '<ol>','','</ol>'
+    pdfs = sorted(glob.glob('notes/*.pdf'))
+    drex = re.compile("(?P<y>\d\d\d\d)-(?P<m>\d\d)-(?P<d>\d\d).pdf\Z")
+    if len(pdfs) == 0:
+        return ''
+    for p in pdfs:
+        m = drex.search(p)
+        if m:
+            p_print = re.sub('(.*).pdf', '\\1-print.pdf', p)
+            y,m,d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            dt = '{:%A %-d %b %Y} '.format(datetime.date(y,m,d))
+            link_pdf = '<a href="' + p + '">[screen version]</a>'
+            link_print_pdf = '<a href="' + p_print + '">[print version]</a>'
+            mid += '\n<li>' + dt + link_pdf + ' ' + link_print_pdf + '</li>\n'
+    return pre + mid + post
+  #+end_src
+
+  #+begin_export html
+    <footer>
+      Page generated with <a href="https://orgmode.org/worg/org-contrib/babel/">org-babel</a> from <a href="index.org">this source file</a>, using the <a href="https://ethanschoonover.com/solarized/">Solarized</a> colour theme.
+    </footer>  
+  #+end_export
+
+* Setup                                                            :noexport:
+  #+name: export-setup
+  #+begin_src emacs-lisp
+    (setq org-html-doctype "html5")
+    (setq org-html-html5-fancy t)
+    (setq org-html-postamble nil)
+  #+end_src
+
+* Options                                                          :noexport:
+#+startup: noptag overview
+#+options: toc:nil num:nil
+#+HTML_HEAD: <link rel='stylesheet' type='text/css' href="https://asilata.github.io/css/stylesheet.css">
+#+HTML_HEAD: <link href='https://fonts.googleapis.com/css?family=Neuton:400,400i,700,700i' rel='stylesheet'>
+
+* Local variables                                                  :noexport:
+# Local variables:
+# eval: (setq org-export-before-parsing-hook nil)
+# eval: (add-hook 'org-export-before-processing-hook (lambda (be) (org-babel-ref-resolve "export-setup")) nil t)
+# End:
+  
