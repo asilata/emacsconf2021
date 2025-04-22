@@ -565,11 +565,11 @@ In this case, for assignments and for worksheets.
 ** Sets and set notation
 1. Some of the following sets are the same, and some are different. Decide and discuss.
    1. \(\emptyset\)
-   2. \(\cal{P}(\emptyset)\)
-   3. \(\emptyset \cap \cal{P}(\emptyset)\)
-   4. \(\emptyset \cup \cal{P}(\emptyset)\)
-   5. \(\emptyset \times \cal{P}(\emptyset)\)
-   6. \(\cal{P}(\emptyset) \times \cal{P}(\emptyset)\)
+   2. \(\mathcal{P}(\emptyset)\)
+   3. \(\emptyset \cap \mathcal{P}(\emptyset)\)
+   4. \(\emptyset \cup \mathcal{P}(\emptyset)\)
+   5. \(\emptyset \times \mathcal{P}(\emptyset)\)
+   6. \(\mathcal{P}(\emptyset) \times \mathcal{P}(\emptyset)\)
 
    #+begin_solution
    Here are all the sets in plainer language.
@@ -758,12 +758,12 @@ In this case, for assignments and for worksheets.
        \node[above of=sleepy](sneezy) {sneezy};
        \node[above right of=dopey](happy) {happy};
        \node[right =2cm of doc](bashful) {bashful};
-       \draw[--] (doc) -- (dopey);
-       \draw[--] (dopey) -- (happy);
-       \draw[--] (happy) -- (sleepy);
-       \draw[--] (dopey) -- (grumpy);
-       \draw[--] (grumpy) -- (sleepy);
-       \draw[--] (sleepy) -- (sneezy);
+       \draw[-] (doc) -- (dopey);
+       \draw[-] (dopey) -- (happy);
+       \draw[-] (happy) -- (sleepy);
+       \draw[-] (dopey) -- (grumpy);
+       \draw[-] (grumpy) -- (sleepy);
+       \draw[-] (sleepy) -- (sneezy);
      \end{tikzpicture}
    \end{center}
    #+end_solution
