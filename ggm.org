@@ -1312,5 +1312,6 @@ An impartial combinatorial game is usually played with two players and satisfies
 
 * Local variables                                                  :noexport:
 # Local variables:
-# eval: (add-hook 'org-export-before-processing-hook (lambda (be) (org-babel-ref-resolve "export-setup")) nil t)
+# eval: (if (not (file-directory-p "artifacts")) (mkdir "artifacts"))
+# eval: (add-hook 'org-export-before-processing-functions (lambda (be) (org-babel-ref-resolve "export-setup")) nil t)
 # End:

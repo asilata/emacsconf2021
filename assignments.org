@@ -795,7 +795,8 @@ In this case, for assignments and for worksheets.
 * Local variables
 # Local variables:
 # org-export-initial-scope: buffer
+# eval: (if (not (file-directory-p "artifacts")) (mkdir "artifacts"))
 # eval: (add-hook 'before-save-hook (lambda () (org-babel-ref-resolve "process-export-filenames")) nil t)
-# eval: (add-hook 'org-export-before-processing-hook (lambda (be) (progn (org-babel-ref-resolve "export-setup") (org-babel-ref-resolve "python-matrix-setup"))) nil t)
+# eval: (add-hook 'org-export-before-processing-functions (lambda (be) (progn (org-babel-ref-resolve "export-setup") (org-babel-ref-resolve "python-matrix-setup"))) nil t)
 # End:
     
